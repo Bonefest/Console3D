@@ -10,3 +10,8 @@ To execute, open a terminal and set TERM=xterm-256color, then find a program and
 To exit press [ESC].
 WASD - moving
 QE - rotation around Y axis
+
+Demo:
+
+![Cube](gifs/cube.gif)
+![Sphere](gifs/sphere.gif)
