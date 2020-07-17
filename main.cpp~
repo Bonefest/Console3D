@@ -1,0 +1,55 @@
+#include <iostream>
+
+#include "ncurses.h"
+
+using namespace std;
+
+#define static global
+
+using real = float;
+
+struct Buffers {
+  real* depth_buffer;
+  short* pixel_buffer;
+};
+
+int terminal_width;
+int terminal_height;
+
+void initColors();
+void initBuffers(Buffers* buffers);
+
+int main()
+{
+
+    initscr();
+    raw();
+    noecho();
+    start_color();
+    initColors();
+
+    getmaxyx(stdscr, terminal_height, terminal_width);
+    
+    Buffers buffers;
+    initBuffers(&buffers);
+
+    
+    
+    refresh();
+    getch();
+    endwin();
+
+    return 0;
+}
+
+void initColors() {
+  for(int i = 0;i < 1000; ++i) {
+    init_color(i + 10, i, i, i);
+  }
+}
+
+void initBuffers(Buffers* buffers) {
+  int total_size = terminal_width * terminal_height;
+  buffers->depth_buffer = new real[total_size];
+  buffers->pixel_buffer = new short[total_size];
+}
