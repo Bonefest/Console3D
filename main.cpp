@@ -5,6 +5,8 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
+#include <limits>
+
 using namespace glm;
 
 #define static global
@@ -89,6 +91,18 @@ private:
   mat4 m_transform;
 };
 
+mat4 perpesctiveMatrix(real near, real far, real fov, real aspect_ratio) {
+  
+  mat4 projection = mat4(1.0);
+  real tan_ratio = std::atan2(radians(fov), 2);
+  projection[0] = vec4(tan_ratio / aspect_ratio, 0.0, 0.0, 0.0);
+  projection[1] = vec4(0.0, tan_ratio, 0.0, 0.0);
+  projection[2] = vec4(0.0, 0.0, (near + far) / (near - far), -1);
+  projection[3] = vec4(0.0, 0.0, 2 * near * far / (near - far), 0.0);
+
+  return projection;
+}
+
 class Application {
 public:
 
@@ -109,8 +123,9 @@ public:
 
     init();
 
+    m_projection = perpesctiveMatrix(0.1, 25.0, 90.0, real(m_terminal_width) / m_terminal_height);
+
     bool running = true;
-    
     while(running) {
 
       int key = getch();
@@ -126,23 +141,40 @@ public:
     endwin();
 
   }
-  void draw() { }
+  void draw() {
+
+    clearBuffers();
+    
+  }
   
 private:
 
   void startDrawing(Triangle* triangle, char filling_symbol) {
+
+    // ? filling_symbol depends on distance: 0 for closest objects (z < 0.5), 9 for farthest
+    
     // Apply vertex transforms:
     //   model-world matrix
     //   world-camera matrix
     //   projection matrix
 
+    // pseudo-clipping (only need to check is triangle outside NDC)
+
     // Apply pespective division
+    // Viewport matrix
     // Rasterize:
     //   use barycentric coordinates
     //   move trough each coordinate and check whether or not it leaves behind current pixel
     //   if it's closest pixel - write it to pixel_buffer and reset depth buffer value
 
     // Repeat for each triangle
+  }
+
+  void clearBuffers() {
+    for(int i = 0; i < m_total_size; ++i) {
+      m_buffers.depth_buffer[i] = std::numeric_limits<real>::max();
+      m_buffers.pixel_buffer[i] = 0;
+    }
   }
   
   void initColors() {
@@ -165,9 +197,11 @@ private:
   
   int m_terminal_width;
   int m_terminal_height;
+  int m_total_size;
 
   Buffers m_buffers;
   Camera  m_camera;
+  mat4    m_projection;
   
 };
 
