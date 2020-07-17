@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cctype>
+#include <vector>
 
 #include "ncurses.h"
 #include "glm/glm.hpp"
@@ -216,6 +217,7 @@ public:
     m_projection = perspective<float>(45.0, float(m_terminal_width) / real(m_terminal_height) * 0.5, 0.1f, 25.0f);
     
     initCube();
+    initSphere(radians(8.0));
 
     m_player_speed = 0.2;
     m_player_rot_speed = 5.0;
@@ -285,8 +287,8 @@ public:
   void draw() {
 
     clearBuffers();
-    for(int i = 0; i < 12; i ++) {
-      startDrawing(& m_cube[i], ' ');
+    for(int i = 0; i < m_sphere.size(); i ++) {
+      startDrawing(&m_sphere[i], ' ');
     }
     
     for(int y = 0; y < m_terminal_height; ++y) {
@@ -401,6 +403,44 @@ private:
     
     
   }
+
+  void initSphere(float step) {
+    float fi = -radians(90.0f);
+
+    auto getVector = [](float f, float t) {
+	       vec3 result;
+	       result.x = std::cos(f) * std::cos(t);
+	       result.y = std::sin(f);
+	       result.z = std::cos(f) * std::sin(t);
+
+	       return result;
+	     };
+    
+    while(fi < radians(90.0)) {
+
+      for(float theta = 0.0f; theta <= radians(360.0f); theta += step) {
+        Triangle triangle;
+        triangle.vertices[0].position = getVector(fi, theta);
+        triangle.vertices[1].position = getVector(fi + step, theta);
+        triangle.vertices[2].position = getVector(fi + step, theta + step);
+
+        float color = 0.1f + (fi + radians(90.0f)) / radians(180.0f) * 0.5;
+        float factor = 1.0 / radians(360.0f) * 0.4f;
+        
+        triangle.vertices[0].color = vec3(color + factor * theta , color + factor * theta, color + factor * theta);
+        triangle.vertices[1].color = vec3(color + factor * theta, color + factor * theta, color + factor * theta);
+        triangle.vertices[2].color = vec3(color + factor * (theta + step), color + factor * (theta + step), color + factor * (theta + step));
+
+        m_sphere.push_back(triangle);
+
+        triangle.vertices[1].position = getVector(fi, theta + step);
+        m_sphere.push_back(triangle);
+      }
+      
+      fi += step;
+    }
+    
+  }
   
   void startDrawing(Triangle* triangle, char filling_symbol) {
 
@@ -473,7 +513,7 @@ private:
 			      transformedVertices[2].position,
 			      vec3(x + 0.5, y + 0.5, 0));
 
-        if(coordinate.a <= -0.05 || coordinate.b <= -0.05 || (coordinate.a + coordinate.b) >= 1.05) {
+        if(coordinate.a <= -0.5 || coordinate.b <= -0.5 || (coordinate.a + coordinate.b) >= 1.5) {
           continue;
         }
 
@@ -545,6 +585,7 @@ private:
   real    m_cube_angle;
   
   Triangle m_cube[12];
+  std::vector<Triangle> m_sphere;
 };
 
 int main()
