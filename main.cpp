@@ -97,6 +97,10 @@ public:
   mat4 getMatrix() const {
     return m_transform;
   }
+
+  vec3 getFront() const {
+    return m_front;
+  }
   
 private:
 
@@ -184,17 +188,12 @@ public:
     m_projection = perpesctiveMatrix(0.1, 25.0, 90.0, real(m_terminal_width) / m_terminal_height);
     m_viewport = viewportMatrix(m_terminal_width, m_terminal_height);
 
-    m_projection = perspective<float>(90.0, float(m_terminal_width) / real(m_terminal_height), 0.1f, 25.0f);
+    m_projection = perspective<float>(90.0, float(m_terminal_width) / real(m_terminal_height) * 0.65, 0.1f, 25.0f);
     
-    m_triangle.vertices[0].position = vec3(-0.5, -0.5, 0.5);
-    m_triangle.vertices[1].position = vec3( 0.0,  0.5, 0.5);
-    m_triangle.vertices[2].position = vec3( 0.5, -0.5, 0.5);    
-
-    m_triangle.vertices[0].color = vec3(0.5, 0.5, 0.5);
-    m_triangle.vertices[1].color = vec3(1.0, 1.0, 1.0);
-    m_triangle.vertices[2].color = vec3(0.5, 0.5, 0.5);
-
-    float position = 0.0;
+    initCube();
+    
+    float position = -1.0f;
+    m_angle = 0.0f;
     
     bool running = true;
     while(running) {
@@ -205,8 +204,11 @@ public:
       }
 
       m_camera.setPosition(vec3(0.0, 0.0, position));
-      position -= 0.01f;
+      // position += 0.1f;
 
+      m_angle += 10.0f;
+      m_model = rotate(mat4(1.0), radians(m_angle), vec3(0.0, 1.0, 0.0));
+      
       draw();
     }
     
@@ -216,7 +218,10 @@ public:
   void draw() {
 
     clearBuffers();
-    startDrawing(&m_triangle, ' ');
+    for(int i = 0; i < 8; i ++) {
+      startDrawing(& m_cube[i], ' ');
+    }
+    
     for(int y = 0; y < m_terminal_height; ++y) {
       for(int x = 0; x < m_terminal_width; ++x) {
         attron(COLOR_PAIR(m_buffers.pixel_buffer[y * m_terminal_width + x]));
@@ -232,6 +237,71 @@ public:
   
 private:
 
+  void initCube() {
+
+    // Front face
+    m_cube[0].vertices[0].position = vec3(-0.5, -0.5, -0.5);
+    m_cube[0].vertices[0].color = vec3(0.5, 0.5, 0.5);
+    m_cube[0].vertices[1].position = vec3(-0.5, 0.5, -0.5);
+    m_cube[0].vertices[1].color = vec3(1.0, 1.0, 1.0);
+    m_cube[0].vertices[2].position = vec3(0.5, 0.5, -0.5);
+    m_cube[0].vertices[2].color = vec3(1.0, 1.0, 1.0);
+
+    m_cube[1].vertices[0].position = vec3(0.5, 0.5, -0.5);
+    m_cube[1].vertices[0].color = vec3(1.0, 1.0, 1.0);
+    m_cube[1].vertices[1].position = vec3(0.5, -0.5, -0.5);
+    m_cube[1].vertices[1].color = vec3(0.5, 0.5, 0.5);
+    m_cube[1].vertices[2].position = vec3(-0.5, -0.5, -0.5);
+    m_cube[1].vertices[2].color = vec3(0.5, 0.5, 0.5);
+
+    // Back face
+    m_cube[2].vertices[0].position = vec3(-0.5, -0.5, 0.5);
+    m_cube[2].vertices[0].color = vec3(0.5, 0.5, 0.5);
+    m_cube[2].vertices[1].position = vec3(-0.5, 0.5, 0.5);
+    m_cube[2].vertices[1].color = vec3(1.0, 1.0, 1.0);
+    m_cube[2].vertices[2].position = vec3(0.5, 0.5, 0.5);
+    m_cube[2].vertices[2].color = vec3(1.0, 1.0, 1.0);
+
+    m_cube[3].vertices[0].position = vec3(0.5, 0.5, 0.5);
+    m_cube[3].vertices[0].color = vec3(1.0, 1.0, 1.0);
+    m_cube[3].vertices[1].position = vec3(0.5, -0.5, 0.5);
+    m_cube[3].vertices[1].color = vec3(0.5, 0.5, 0.5);
+    m_cube[3].vertices[2].position = vec3(-0.5, -0.5, 0.5);
+    m_cube[3].vertices[2].color = vec3(0.5, 0.5, 0.5);
+    
+    // Left face
+    m_cube[4].vertices[0].position = vec3(-0.5, -0.5, -0.5);
+    m_cube[4].vertices[0].color = vec3(0.5, 0.5, 0.5);
+    m_cube[4].vertices[1].position = vec3(-0.5,  0.5, -0.5);
+    m_cube[4].vertices[1].color = vec3(1.0, 1.0, 1.0);
+    m_cube[4].vertices[2].position = vec3(-0.5, 0.5, 0.5);
+    m_cube[4].vertices[2].color = vec3(1.0, 1.0, 1.0);
+
+    m_cube[5].vertices[0].position = vec3(-0.5, 0.5, 0.5);
+    m_cube[5].vertices[0].color = vec3(1.0, 1.0, 1.0);
+    m_cube[5].vertices[1].position = vec3(-0.5,-0.5, 0.5);
+    m_cube[5].vertices[1].color = vec3(0.5, 0.5, 0.5);
+    m_cube[5].vertices[2].position = vec3(-0.5, -0.5, -0.5);
+    m_cube[5].vertices[2].color = vec3(0.5, 0.5, 0.5);    
+
+    // Right face
+    m_cube[6].vertices[0].position = vec3(0.5, -0.5, -0.5);
+    m_cube[6].vertices[0].color = vec3(0.5, 0.5, 0.5);
+    m_cube[6].vertices[1].position = vec3(0.5,  0.5, -0.5);
+    m_cube[6].vertices[1].color = vec3(1.0, 1.0, 1.0);
+    m_cube[6].vertices[2].position = vec3(0.5, 0.5, 0.5);
+    m_cube[6].vertices[2].color = vec3(1.0, 1.0, 1.0);
+
+    m_cube[7].vertices[0].position = vec3(0.5, 0.5, 0.5);
+    m_cube[7].vertices[0].color = vec3(1.0, 1.0, 1.0);
+    m_cube[7].vertices[1].position = vec3(0.5,-0.5, 0.5);
+    m_cube[7].vertices[1].color = vec3(0.5, 0.5, 0.5);
+    m_cube[7].vertices[2].position = vec3(0.5, -0.5, -0.5);
+    m_cube[7].vertices[2].color = vec3(0.5, 0.5, 0.5);    
+
+    
+  }
+  
   void startDrawing(Triangle* triangle, char filling_symbol) {
 
     // ? filling_symbol depends on distance: 0 for closest objects (z < 0.5), 9 for farthest
@@ -258,8 +328,7 @@ private:
     Vertex transformedVertices[3];
     for(int i = 0; i < 3; i++) {
       vec4 vertex_position = vec4(triangle->vertices[i].position, 1.0);
-      vertex_position  = m_projection * m_cameraTransform * vertex_position;
-      // printw("%f %f %f %f\n", vertex_position.x, vertex_position.y, vertex_position.z, vertex_position.w);
+      vertex_position  = m_projection * m_cameraTransform * m_model * vertex_position;
       vertex_position /= vertex_position[3];
 
       if(vertex_position.x > 1.0 || vertex_position.x < -1.0 ||
@@ -273,14 +342,6 @@ private:
       transformedVertices[i] = triangle->vertices[i];
       transformedVertices[i].position = vertex_position;
     }
-
-
-    // printw("%f %f %f %f\n\n", m_cameraTransform[0][3], m_cameraTransform[1][3], m_cameraTransform[2][3], m_cameraTransform[3][3]);
-    
-       // printw("%f %f %f\n", transformedVertices[0].position.x, transformedVertices[0].position.y, transformedVertices[0].position.z);
-    // printw("%f %f %f\n", float(m_cameraTransform[0][0]), m_cameraTransform[0][1], m_cameraTransform[0][2]);
-    // printw("%f %f %f\n", float(m_cameraTransform[1][0]), m_cameraTransform[1][1], m_cameraTransform[1][2]);
-    // printw("%f %f %f\n", float(m_cameraTransform[2][0]), m_cameraTransform[2][1], m_cameraTransform[2][2]);    
 
     if(clippedVertices == 3) {
       return;
@@ -304,8 +365,6 @@ private:
     minX = std::max(minX, 0); minY = std::max(minY, 0);
     maxX = std::min(maxX, m_terminal_width); maxY = std::min(maxY, m_terminal_height);
     
-    // printw("%d %d, %d %d\n", minX, minY, maxX, maxY);
-
     // Rasterization
     for(int x = minX; x < maxX; x++) {
       for(int y = minY; y < maxY; y++) {
@@ -314,20 +373,17 @@ private:
 			      transformedVertices[2].position,
 			      vec3(x + 0.5, y + 0.5, 0));
 
-        if(coordinate.a <= 0.0 || coordinate.b <= 0.0 || (coordinate.a + coordinate.b) >= 1.0) {
+        if(coordinate.a <= -0.1 || coordinate.b <= -0.1 || (coordinate.a + coordinate.b) >= 1.2) {
           continue;
         }
 
-        // printw("%f %f %f\n", coordinate.a, coordinate.b, coordinate.c);
-        
         vec3 v0 = transformedVertices[1].position - transformedVertices[0].position;
         vec3 v1 = transformedVertices[2].position - transformedVertices[0].position;
         vec3 v2 = transformedVertices[1].position - transformedVertices[2].position;
         
-        vec3 pos = v0 * coordinate.b + v1 * coordinate.c + v2 * coordinate.a + transformedVertices[0].position;
-
-        // printw("%f\n", pos.z);
-
+        //        vec3 pos = v0 * coordinate.b + v1 * coordinate.c + v2 * coordinate.a + transformedVertices[0].position;
+        vec3 pos = v0 * coordinate.a + v1 * coordinate.b + transformedVertices[0].position;
+        
         // Depth test
         if(pos.z >= m_buffers.depth_buffer[y * m_terminal_width + x]) {
           continue;
@@ -384,9 +440,11 @@ private:
   Camera  m_camera;
   mat4    m_projection;
   mat4    m_viewport;
+  mat4    m_model;
 
-  Triangle m_triangle;
-
+  real    m_angle;
+  
+  Triangle m_cube[12];
 };
 
 int main()
