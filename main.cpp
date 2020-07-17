@@ -65,7 +65,9 @@ public:
   Camera(): m_position(0.0f, 0.0f, 0.0f),
             m_up(0.0f, 1.0f, 0.0f),
             m_front(0.0f, 0.0f, -1.0f),
-            m_row(0.0f), m_pitch(0.0f) { }
+            m_row(-90.0f), m_pitch(0.0f) {
+    recalculateTransform();
+  }
   
   void setRotation(real row, real pitch) {
     m_row = row;
@@ -99,21 +101,24 @@ public:
 private:
 
   void recalculateTransform() {
-    m_front.x = std::cos(m_pitch) * std::cos(m_row);
-    m_front.y = std::sin(m_pitch);
-    m_front.z = std::cos(m_pitch) * std::sin(m_row);
+    real row = radians(m_row);
+    real pitch = radians(m_pitch);
+    
+    m_front.x = std::cos(pitch) * std::cos(row);
+    m_front.y = std::sin(pitch);
+    m_front.z = std::cos(pitch) * std::sin(row);
 
     vec3 side = cross(m_up, m_front);
-    vec3 up = cross(m_front, side);
+    vec3 up = cross(side, m_front);
 
-    m_transform = glm::mat4(0.0);
-    m_transform[0] = vec4(m_front, 0.0);
-    m_transform[1] = vec4(side, 0.0);
-    m_transform[2] = vec4(up, 0.0);
-
+    m_transform = glm::mat4(1.0);
+    
+    m_transform[0] = vec4(side, 0.0);    
+    m_transform[1] = vec4(up, 0.0);
+    m_transform[2] = vec4(m_front, 0.0);
+    
     mat4 translate_matrix = translate(mat4(1.0), m_position);
     m_transform = inverse(translate_matrix * m_transform);
-    
   }
   
   vec3 m_position;
@@ -129,9 +134,10 @@ private:
 mat4 perpesctiveMatrix(real near, real far, real fov, real aspect_ratio) {
   
   mat4 projection = mat4(1.0);
-  real tan_ratio = std::atan2(radians(fov), 2);
-  projection[0] = vec4(tan_ratio / aspect_ratio, 0.0, 0.0, 0.0);
-  projection[1] = vec4(0.0, tan_ratio, 0.0, 0.0);
+  real tan_ratio = std::tan(radians(fov/2));
+
+  projection[0] = vec4(1.0 / (tan_ratio * aspect_ratio), 0.0, 0.0, 0.0);
+  projection[1] = vec4(0.0, 1.0 / tan_ratio, 0.0, 0.0);
   projection[2] = vec4(0.0, 0.0, (near + far) / (near - far), -1);
   projection[3] = vec4(0.0, 0.0, 2 * near * far / (near - far), 0.0);
 
@@ -145,7 +151,7 @@ mat4 viewportMatrix(int screen_width, int screen_height) {
   viewportMat[1] = vec4(0.0, 0.5 * screen_height, 0.0, 0.0);
   viewportMat[2] = vec4(0.0, 0.0, 0.5, 0.0);
 
-  viewportMat = translate(mat4(1.0), vec3(1.0, 1.0, 1.0)) * viewportMat;
+  viewportMat = viewportMat * translate(mat4(1.0), vec3(1.0, 1.0, 1.0));
 
   return viewportMat;
 }
@@ -156,14 +162,19 @@ public:
   void init() {
     initscr();
     raw();
+    keypad(stdscr, TRUE);
     noecho();
+    curs_set(0);
+    halfdelay(1);
+    
     start_color();
 
     initColors();
 
     getmaxyx(stdscr, m_terminal_height, m_terminal_width);
+    m_total_size = m_terminal_width * m_terminal_height;
 
-    
+    initBuffers();
   }
 
   void run() {
@@ -172,6 +183,18 @@ public:
 
     m_projection = perpesctiveMatrix(0.1, 25.0, 90.0, real(m_terminal_width) / m_terminal_height);
     m_viewport = viewportMatrix(m_terminal_width, m_terminal_height);
+
+    m_projection = perspective<float>(90.0, float(m_terminal_width) / real(m_terminal_height), 0.1f, 25.0f);
+    
+    m_triangle.vertices[0].position = vec3(-0.5, -0.5, 0.5);
+    m_triangle.vertices[1].position = vec3( 0.0,  0.5, 0.5);
+    m_triangle.vertices[2].position = vec3( 0.5, -0.5, 0.5);    
+
+    m_triangle.vertices[0].color = vec3(0.5, 0.5, 0.5);
+    m_triangle.vertices[1].color = vec3(1.0, 1.0, 1.0);
+    m_triangle.vertices[2].color = vec3(0.5, 0.5, 0.5);
+
+    float position = 0.0;
     
     bool running = true;
     while(running) {
@@ -181,19 +204,30 @@ public:
         running = false;
       }
 
+      m_camera.setPosition(vec3(0.0, 0.0, position));
+      position -= 0.01f;
+
       draw();
-      refresh();
     }
     
-    refresh();
-    getch();
     endwin();
 
   }
   void draw() {
 
     clearBuffers();
-    
+    startDrawing(&m_triangle, ' ');
+    for(int y = 0; y < m_terminal_height; ++y) {
+      for(int x = 0; x < m_terminal_width; ++x) {
+        attron(COLOR_PAIR(m_buffers.pixel_buffer[y * m_terminal_width + x]));
+        mvaddch(y, x, ' ');
+        attroff(COLOR_PAIR(m_buffers.pixel_buffer[y * m_terminal_width + x]));
+        refresh();
+      }
+
+    }
+
+
   }
   
 private:
@@ -225,6 +259,7 @@ private:
     for(int i = 0; i < 3; i++) {
       vec4 vertex_position = vec4(triangle->vertices[i].position, 1.0);
       vertex_position  = m_projection * m_cameraTransform * vertex_position;
+      // printw("%f %f %f %f\n", vertex_position.x, vertex_position.y, vertex_position.z, vertex_position.w);
       vertex_position /= vertex_position[3];
 
       if(vertex_position.x > 1.0 || vertex_position.x < -1.0 ||
@@ -239,6 +274,14 @@ private:
       transformedVertices[i].position = vertex_position;
     }
 
+
+    // printw("%f %f %f %f\n\n", m_cameraTransform[0][3], m_cameraTransform[1][3], m_cameraTransform[2][3], m_cameraTransform[3][3]);
+    
+       // printw("%f %f %f\n", transformedVertices[0].position.x, transformedVertices[0].position.y, transformedVertices[0].position.z);
+    // printw("%f %f %f\n", float(m_cameraTransform[0][0]), m_cameraTransform[0][1], m_cameraTransform[0][2]);
+    // printw("%f %f %f\n", float(m_cameraTransform[1][0]), m_cameraTransform[1][1], m_cameraTransform[1][2]);
+    // printw("%f %f %f\n", float(m_cameraTransform[2][0]), m_cameraTransform[2][1], m_cameraTransform[2][2]);    
+
     if(clippedVertices == 3) {
       return;
     }
@@ -249,14 +292,19 @@ private:
 
     int minX = m_terminal_width,  maxX = 0;
     int minY = m_terminal_height, maxY = 0;
-    
-    for(int i = 0; i < 3; i++) {
-      minX = std::max<int>(0, transformedVertices[i].position.x);
-      maxX = std::max<int>(m_terminal_width, transformedVertices[i].position.x);
 
-      minY = std::max<int>(0, transformedVertices[i].position.y);
-      maxY = std::max<int>(m_terminal_height, transformedVertices[i].position.y);
+    for(int i = 0; i < 3; i++) {
+      minX = std::min<int>(minX, transformedVertices[i].position.x);
+      maxX = std::max<int>(maxX, transformedVertices[i].position.x);
+
+      minY = std::min<int>(minY, transformedVertices[i].position.y);
+      maxY = std::max<int>(maxY, transformedVertices[i].position.y);
     }
+
+    minX = std::max(minX, 0); minY = std::max(minY, 0);
+    maxX = std::min(maxX, m_terminal_width); maxY = std::min(maxY, m_terminal_height);
+    
+    // printw("%d %d, %d %d\n", minX, minY, maxX, maxY);
 
     // Rasterization
     for(int x = minX; x < maxX; x++) {
@@ -266,16 +314,19 @@ private:
 			      transformedVertices[2].position,
 			      vec3(x + 0.5, y + 0.5, 0));
 
-        if(coordinate.a < 0.0 || coordinate.a > 1.0 ||
-           coordinate.b < 0.0 || coordinate.b > 1.0 ||
-           coordinate.c < 0.0 || coordinate.c > 1.0) {
+        if(coordinate.a <= 0.0 || coordinate.b <= 0.0 || (coordinate.a + coordinate.b) >= 1.0) {
           continue;
         }
 
+        // printw("%f %f %f\n", coordinate.a, coordinate.b, coordinate.c);
+        
         vec3 v0 = transformedVertices[1].position - transformedVertices[0].position;
         vec3 v1 = transformedVertices[2].position - transformedVertices[0].position;
+        vec3 v2 = transformedVertices[1].position - transformedVertices[2].position;
+        
+        vec3 pos = v0 * coordinate.b + v1 * coordinate.c + v2 * coordinate.a + transformedVertices[0].position;
 
-        vec3 pos = v0 * coordinate.a + v1 * coordinate.b;
+        // printw("%f\n", pos.z);
 
         // Depth test
         if(pos.z >= m_buffers.depth_buffer[y * m_terminal_width + x]) {
@@ -284,12 +335,14 @@ private:
 
         vec3 cv0 = transformedVertices[1].color - transformedVertices[0].color;
         vec3 cv1 = transformedVertices[2].color - transformedVertices[0].color;
+        vec3 cv2 = transformedVertices[1].color - transformedVertices[2].color;
 
-        vec3 color = cv0 * coordinate.a + cv1 * coordinate.b;
+        vec3 color = cv0 * coordinate.a + cv1 * coordinate.c + transformedVertices[0].color;
 
-        // Normal ...
+        // TODO: Normal
 
-        m_buffers.pixel_buffer[y * m_terminal_width + x] = color.x; // set char???
+        m_buffers.pixel_buffer[y * m_terminal_width + x] = 254 * color.r; // set char???
+        m_buffers.depth_buffer[y * m_terminal_width + x] = pos.z;
         
       }
     }
@@ -304,15 +357,15 @@ private:
   }
   
   void initColors() {
-    for(int i = 0;i < 1000; ++i) {
-      init_color(i + 10, i, i, i);
+    for(int i = 0;i < 255; ++i) {
+      init_color(i, i, i, i);
+      init_pair(i, i, i);
     }
   }
   
-  void initBuffers(Buffers* buffers) {
-    int total_size = m_terminal_width * m_terminal_height;
-    m_buffers.depth_buffer = new real[total_size];
-    m_buffers.pixel_buffer = new short[total_size];
+  void initBuffers() {
+    m_buffers.depth_buffer = new real[m_total_size];
+    m_buffers.pixel_buffer = new short[m_total_size];
 
   }
   
@@ -331,7 +384,9 @@ private:
   Camera  m_camera;
   mat4    m_projection;
   mat4    m_viewport;
-  
+
+  Triangle m_triangle;
+
 };
 
 int main()
