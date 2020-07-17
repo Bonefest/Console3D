@@ -28,6 +28,37 @@ struct Triangle {
   Vertex vertices[3];
 };
 
+struct Barycentric {
+  real a;
+  real b;
+  real c;
+};
+
+Barycentric convertToBarycentric(vec3 posA, vec3 posB, vec3 posC, vec3 pos) {
+  posA.z = 0;
+  posB.z = 0;
+  posC.z = 0;
+  
+  vec3 v0 = posB - posA;
+  vec3 v1 = posC - posA;
+  vec3 v2 = pos - posA;
+
+  real d00 = dot(v0, v0);
+  real d01 = dot(v0, v1);
+  real d11 = dot(v1, v1);
+  real d20 = dot(v2, v0);
+  real d21 = dot(v2, v1);
+
+  real denom = d00 * d11 - d01 * d01;
+
+  Barycentric result;
+  result.a = (d11 * d20 - d01 * d21) / denom;
+  result.b = (d00 * d21 - d01 * d20) / denom;
+  result.c = 1.0 - result.a - result.b;
+
+  return result;
+}
+
 class Camera {
 public:
 
@@ -59,6 +90,10 @@ public:
   
   vec3 convertToCameraCoord(vec3 vector) {
     return vec3(m_transform * vec4(vector, 1.0));
+  }
+
+  mat4 getMatrix() const {
+    return m_transform;
   }
   
 private:
@@ -103,6 +138,18 @@ mat4 perpesctiveMatrix(real near, real far, real fov, real aspect_ratio) {
   return projection;
 }
 
+mat4 viewportMatrix(int screen_width, int screen_height) {
+
+  mat4 viewportMat = mat4(1.0);
+  viewportMat[0] = vec4(0.5 * screen_width, 0.0, 0.0, 0.0);
+  viewportMat[1] = vec4(0.0, 0.5 * screen_height, 0.0, 0.0);
+  viewportMat[2] = vec4(0.0, 0.0, 0.5, 0.0);
+
+  viewportMat = translate(mat4(1.0), vec3(1.0, 1.0, 1.0)) * viewportMat;
+
+  return viewportMat;
+}
+
 class Application {
 public:
 
@@ -124,7 +171,8 @@ public:
     init();
 
     m_projection = perpesctiveMatrix(0.1, 25.0, 90.0, real(m_terminal_width) / m_terminal_height);
-
+    m_viewport = viewportMatrix(m_terminal_width, m_terminal_height);
+    
     bool running = true;
     while(running) {
 
@@ -132,7 +180,8 @@ public:
       if(key == 27) {
         running = false;
       }
-      
+
+      draw();
       refresh();
     }
     
@@ -158,9 +207,8 @@ private:
     //   world-camera matrix
     //   projection matrix
 
-    // pseudo-clipping (only need to check is triangle outside NDC)
-
     // Apply pespective division
+    // pseudo-clipping (only need to check is triangle outside NDC)
     // Viewport matrix
     // Rasterize:
     //   use barycentric coordinates
@@ -168,6 +216,84 @@ private:
     //   if it's closest pixel - write it to pixel_buffer and reset depth buffer value
 
     // Repeat for each triangle
+
+    mat4 m_cameraTransform = m_camera.getMatrix();
+
+    int clippedVertices = 0;
+    
+    Vertex transformedVertices[3];
+    for(int i = 0; i < 3; i++) {
+      vec4 vertex_position = vec4(triangle->vertices[i].position, 1.0);
+      vertex_position  = m_projection * m_cameraTransform * vertex_position;
+      vertex_position /= vertex_position[3];
+
+      if(vertex_position.x > 1.0 || vertex_position.x < -1.0 ||
+         vertex_position.y > 1.0 || vertex_position.y < -1.0 ||
+         vertex_position.z > 1.0 || vertex_position.z < -1.0) {
+
+        clippedVertices++;
+        
+      }
+      
+      transformedVertices[i] = triangle->vertices[i];
+      transformedVertices[i].position = vertex_position;
+    }
+
+    if(clippedVertices == 3) {
+      return;
+    }
+
+    for(int i = 0;i < 3; i++) {
+      transformedVertices[i].position = vec3(m_viewport * vec4(transformedVertices[i].position, 1.0));
+    }
+
+    int minX = m_terminal_width,  maxX = 0;
+    int minY = m_terminal_height, maxY = 0;
+    
+    for(int i = 0; i < 3; i++) {
+      minX = std::max<int>(0, transformedVertices[i].position.x);
+      maxX = std::max<int>(m_terminal_width, transformedVertices[i].position.x);
+
+      minY = std::max<int>(0, transformedVertices[i].position.y);
+      maxY = std::max<int>(m_terminal_height, transformedVertices[i].position.y);
+    }
+
+    // Rasterization
+    for(int x = minX; x < maxX; x++) {
+      for(int y = minY; y < maxY; y++) {
+        Barycentric coordinate = convertToBarycentric(transformedVertices[0].position,
+			      transformedVertices[1].position,
+			      transformedVertices[2].position,
+			      vec3(x + 0.5, y + 0.5, 0));
+
+        if(coordinate.a < 0.0 || coordinate.a > 1.0 ||
+           coordinate.b < 0.0 || coordinate.b > 1.0 ||
+           coordinate.c < 0.0 || coordinate.c > 1.0) {
+          continue;
+        }
+
+        vec3 v0 = transformedVertices[1].position - transformedVertices[0].position;
+        vec3 v1 = transformedVertices[2].position - transformedVertices[0].position;
+
+        vec3 pos = v0 * coordinate.a + v1 * coordinate.b;
+
+        // Depth test
+        if(pos.z >= m_buffers.depth_buffer[y * m_terminal_width + x]) {
+          continue;
+        }
+
+        vec3 cv0 = transformedVertices[1].color - transformedVertices[0].color;
+        vec3 cv1 = transformedVertices[2].color - transformedVertices[0].color;
+
+        vec3 color = cv0 * coordinate.a + cv1 * coordinate.b;
+
+        // Normal ...
+
+        m_buffers.pixel_buffer[y * m_terminal_width + x] = color.x; // set char???
+        
+      }
+    }
+    
   }
 
   void clearBuffers() {
@@ -194,6 +320,8 @@ private:
     delete [] buffers->depth_buffer;
     delete [] buffers->pixel_buffer;
   }
+
+  
   
   int m_terminal_width;
   int m_terminal_height;
@@ -202,6 +330,7 @@ private:
   Buffers m_buffers;
   Camera  m_camera;
   mat4    m_projection;
+  mat4    m_viewport;
   
 };
 
