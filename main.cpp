@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cctype>
 
 #include "ncurses.h"
 #include "glm/glm.hpp"
@@ -89,6 +90,26 @@ public:
     m_position = position;
     recalculateTransform();
   }
+
+  void setData(const vec3& position, real row, real pitch) {
+    m_position = position;
+    m_row = row;
+    m_pitch = pitch;
+
+    recalculateTransform();
+  }
+
+  vec3 getPosition() const {
+    return m_position;
+  }
+
+  real getRow() const {
+    return m_row;
+  }
+
+  real getPitch() const {
+    return m_pitch;
+  }
   
   vec3 convertToCameraCoord(vec3 vector) {
     return vec3(m_transform * vec4(vector, 1.0));
@@ -112,17 +133,21 @@ private:
     m_front.y = std::sin(pitch);
     m_front.z = std::cos(pitch) * std::sin(row);
 
-    vec3 side = cross(m_up, m_front);
-    vec3 up = cross(side, m_front);
-
-    m_transform = glm::mat4(1.0);
+    m_front = normalize(m_front);
     
-    m_transform[0] = vec4(side, 0.0);    
+    vec3 side = cross(m_up, m_front);
+    vec3 up = cross(m_front, side);
+
+    m_transform = mat4(1.0);
+    
+    m_transform[0] = vec4(side, 0.0);
     m_transform[1] = vec4(up, 0.0);
     m_transform[2] = vec4(m_front, 0.0);
+
+    m_transform = translate(mat4(1.0), m_position) * m_transform;
     
-    mat4 translate_matrix = translate(mat4(1.0), m_position);
-    m_transform = inverse(translate_matrix * m_transform);
+    m_transform = inverse(m_transform);
+    
   }
   
   vec3 m_position;
@@ -188,37 +213,79 @@ public:
     m_projection = perpesctiveMatrix(0.1, 25.0, 90.0, real(m_terminal_width) / m_terminal_height);
     m_viewport = viewportMatrix(m_terminal_width, m_terminal_height);
 
-    m_projection = perspective<float>(90.0, float(m_terminal_width) / real(m_terminal_height) * 0.65, 0.1f, 25.0f);
+    m_projection = perspective<float>(45.0, float(m_terminal_width) / real(m_terminal_height) * 0.5, 0.1f, 25.0f);
     
     initCube();
+
+    m_player_speed = 0.2;
+    m_player_rot_speed = 5.0;
+
+    m_cube_angle = 0.0f;
     
-    float position = -1.0f;
-    m_angle = 0.0f;
-    
-    bool running = true;
-    while(running) {
+    m_running = true;
+    while(m_running) {
 
-      int key = getch();
-      if(key == 27) {
-        running = false;
-      }
-
-      m_camera.setPosition(vec3(0.0, 0.0, position));
-      // position += 0.1f;
-
-      m_angle += 10.0f;
-      m_model = rotate(mat4(1.0), radians(m_angle), vec3(0.0, 1.0, 0.0));
+      m_cube_angle += 2.0;
+      m_model = translate(mat4(1.0), vec3(0.0, 0.0, 5.0)) * rotate(mat4(1.0), radians(m_cube_angle), vec3(0.0, 1.0, 0.0)) * rotate(mat4(1.0), radians(m_cube_angle), vec3(1.0, 0.0, 0.0));
       
+      handleInput();
       draw();
+      
     }
-    
+
+    freeBuffers();
     endwin();
 
   }
+
+  void handleInput() {
+    int key = getch();
+
+    vec3 camera_front = m_camera.getFront();
+    vec3 camera_side = cross(camera_front, vec3(0.0, 1.0, 0.0));
+    vec3 camera_position = m_camera.getPosition();
+
+    real row = m_camera.getRow();
+    real pitch = m_camera.getPitch();
+    
+    //ESC
+    if(key == 27) {
+      m_running = false;
+    }
+
+    key = tolower(key);
+    
+    if(key == 'w') {
+      camera_position -= camera_front * m_player_speed;
+    }
+
+    else if(key == 's') {
+      camera_position += camera_front * m_player_speed;
+    }
+
+    else if(key == 'a') {
+      camera_position += camera_side * m_player_speed;
+    }
+
+    else if(key == 'd') {
+      camera_position -= camera_side * m_player_speed;
+    }
+
+    else if(key == 'q') {
+      row += m_player_rot_speed;
+    }
+
+    else if(key == 'e') {
+      row -= m_player_rot_speed;
+    }
+
+    m_camera.setData(camera_position, row, pitch);
+  }
+  
   void draw() {
 
     clearBuffers();
-    for(int i = 0; i < 8; i ++) {
+    for(int i = 0; i < 12; i ++) {
       startDrawing(& m_cube[i], ' ');
     }
     
@@ -227,11 +294,11 @@ public:
         attron(COLOR_PAIR(m_buffers.pixel_buffer[y * m_terminal_width + x]));
         mvaddch(y, x, ' ');
         attroff(COLOR_PAIR(m_buffers.pixel_buffer[y * m_terminal_width + x]));
-        refresh();
       }
 
     }
 
+    refresh();
 
   }
   
@@ -239,6 +306,8 @@ private:
 
   void initCube() {
 
+    m_model = mat4(1.0);
+    
     // Front face
     m_cube[0].vertices[0].position = vec3(-0.5, -0.5, -0.5);
     m_cube[0].vertices[0].color = vec3(0.5, 0.5, 0.5);
@@ -299,6 +368,36 @@ private:
     m_cube[7].vertices[2].position = vec3(0.5, -0.5, -0.5);
     m_cube[7].vertices[2].color = vec3(0.5, 0.5, 0.5);    
 
+    // Top face
+    m_cube[8].vertices[0].position = vec3(-0.5, 0.5, -0.5);
+    m_cube[8].vertices[0].color = vec3(0.5, 0.5, 0.5);
+    m_cube[8].vertices[1].position = vec3(-0.5, 0.5, 0.5);
+    m_cube[8].vertices[1].color = vec3(1.0, 1.0, 1.0);
+    m_cube[8].vertices[2].position = vec3( 0.5, 0.5, 0.5);
+    m_cube[8].vertices[2].color = vec3(1.0, 1.0, 1.0);
+
+    m_cube[9].vertices[0].position = vec3(0.5, 0.5, 0.5);
+    m_cube[9].vertices[0].color = vec3(1.0, 1.0, 1.0);
+    m_cube[9].vertices[1].position = vec3(0.5, 0.5, -0.5);
+    m_cube[9].vertices[1].color = vec3(0.5, 0.5, 0.5);
+    m_cube[9].vertices[2].position = vec3(-0.5, 0.5, -0.5);
+    m_cube[9].vertices[2].color = vec3(0.5, 0.5, 0.5);
+
+    // Bottom face
+    m_cube[10].vertices[0].position = vec3(-0.5, -0.5, -0.5);
+    m_cube[10].vertices[0].color = vec3(0.5, 0.5, 0.5);
+    m_cube[10].vertices[1].position = vec3(-0.5, -0.5, 0.5);
+    m_cube[10].vertices[1].color = vec3(1.0, 1.0, 1.0);
+    m_cube[10].vertices[2].position = vec3( 0.5, -0.5, 0.5);
+    m_cube[10].vertices[2].color = vec3(1.0, 1.0, 1.0);
+
+    m_cube[11].vertices[0].position = vec3(0.5, -0.5, 0.5);
+    m_cube[11].vertices[0].color = vec3(1.0, 1.0, 1.0);
+    m_cube[11].vertices[1].position = vec3(0.5, -0.5, -0.5);
+    m_cube[11].vertices[1].color = vec3(0.5, 0.5, 0.5);
+    m_cube[11].vertices[2].position = vec3(-0.5, -0.5, -0.5);
+    m_cube[11].vertices[2].color = vec3(0.5, 0.5, 0.5);
+    
     
   }
   
@@ -373,15 +472,13 @@ private:
 			      transformedVertices[2].position,
 			      vec3(x + 0.5, y + 0.5, 0));
 
-        if(coordinate.a <= -0.1 || coordinate.b <= -0.1 || (coordinate.a + coordinate.b) >= 1.2) {
+        if(coordinate.a <= -0.05 || coordinate.b <= -0.05 || (coordinate.a + coordinate.b) >= 1.05) {
           continue;
         }
 
         vec3 v0 = transformedVertices[1].position - transformedVertices[0].position;
         vec3 v1 = transformedVertices[2].position - transformedVertices[0].position;
-        vec3 v2 = transformedVertices[1].position - transformedVertices[2].position;
         
-        //        vec3 pos = v0 * coordinate.b + v1 * coordinate.c + v2 * coordinate.a + transformedVertices[0].position;
         vec3 pos = v0 * coordinate.a + v1 * coordinate.b + transformedVertices[0].position;
         
         // Depth test
@@ -391,7 +488,6 @@ private:
 
         vec3 cv0 = transformedVertices[1].color - transformedVertices[0].color;
         vec3 cv1 = transformedVertices[2].color - transformedVertices[0].color;
-        vec3 cv2 = transformedVertices[1].color - transformedVertices[2].color;
 
         vec3 color = cv0 * coordinate.a + cv1 * coordinate.c + transformedVertices[0].color;
 
@@ -425,12 +521,12 @@ private:
 
   }
   
-  void freeBuffers(Buffers* buffers) {
-    delete [] buffers->depth_buffer;
-    delete [] buffers->pixel_buffer;
+  void freeBuffers() {
+    delete [] m_buffers.depth_buffer;
+    delete [] m_buffers.pixel_buffer;
   }
 
-  
+  bool m_running;
   
   int m_terminal_width;
   int m_terminal_height;
@@ -442,7 +538,10 @@ private:
   mat4    m_viewport;
   mat4    m_model;
 
-  real    m_angle;
+  real    m_player_speed;
+  real    m_player_rot_speed;
+
+  real    m_cube_angle;
   
   Triangle m_cube[12];
 };
