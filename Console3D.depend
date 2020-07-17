@@ -1,6 +1,7 @@
 # depslib dependency file v1.0
-1595003197 source:/home/miofix/Programming/GameDevelopment/Console3D/Console3D/main.cpp
+1595018618 source:/home/miofix/Programming/GameDevelopment/Console3D/Console3D/main.cpp
 	<cmath>
+	<cctype>
 	"ncurses.h"
 	"glm/glm.hpp"
 	"glm/gtc/matrix_transform.hpp"

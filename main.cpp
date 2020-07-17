@@ -291,9 +291,10 @@ public:
     
     for(int y = 0; y < m_terminal_height; ++y) {
       for(int x = 0; x < m_terminal_width; ++x) {
-        attron(COLOR_PAIR(m_buffers.pixel_buffer[y * m_terminal_width + x]));
+        int pair = m_buffers.pixel_buffer[y * m_terminal_width + x];
+        attron(COLOR_PAIR(pair));
         mvaddch(y, x, ' ');
-        attroff(COLOR_PAIR(m_buffers.pixel_buffer[y * m_terminal_width + x]));
+        attroff(COLOR_PAIR(pair));
       }
 
     }
