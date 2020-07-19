@@ -286,6 +286,7 @@ public:
   
   void draw() {
 
+    clear();
     clearBuffers();
     for(int i = 0;i < 12; i++) {
       startDrawing(&m_cube[i], ' ');
@@ -297,9 +298,40 @@ public:
     for(int y = 0; y < m_terminal_height; ++y) {
       for(int x = 0; x < m_terminal_width; ++x) {
         int pair = m_buffers.pixel_buffer[y * m_terminal_width + x];
-        attron(COLOR_PAIR(pair));
-        mvaddch(y, x, ' ');
-        attroff(COLOR_PAIR(pair));
+        if(m_buffers.depth_buffer[y * m_terminal_width + x] < 100.0) {
+          char symbol = 'a' + rand() % ('z' - 'a');
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 1.9) {
+          //   symbol = '9';
+          // }
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 1.7) {
+          //   symbol = '8';
+          // }
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 1.5) {
+          //   symbol = '7';
+          // }
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 1.3) {
+          //   symbol = '6';
+          // }
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 1.1) {
+          //   symbol = '5';
+          // }
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 1.05) {
+          //   symbol = '4';
+          // }
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 1.0) {
+          //   symbol = '3';
+          // }
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 0.95) {
+          //   symbol = '2';
+          // }
+          // if(m_buffers.depth_buffer[y * m_terminal_width + x] < 0.9) {
+          //   symbol = '1';
+          // }
+          
+          attron(COLOR_PAIR(pair));
+          mvaddch(y, x, symbol);
+          attroff(COLOR_PAIR(pair));
+        }
       }
 
     }
@@ -569,7 +601,7 @@ private:
   void initColors() {
     for(int i = 0;i < 255; ++i) {
       init_color(i, i, i, i);
-      init_pair(i, i, i);
+      init_pair(i, i, COLOR_WHITE);
     }
   }
   
