@@ -14,4 +14,3 @@ QE - rotation around Y axis
 Demo:
 
 ![Cube](gifs/cube.gif)
-![Sphere](gifs/sphere.gif)

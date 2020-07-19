@@ -217,7 +217,7 @@ public:
     m_projection = perspective<float>(45.0, float(m_terminal_width) / real(m_terminal_height) * 0.5, 0.1f, 25.0f);
     
     initCube();
-    initSphere(radians(8.0));
+    initSphere(radians(60.0), radians(90.0));
 
     m_player_speed = 0.2;
     m_player_rot_speed = 5.0;
@@ -227,7 +227,7 @@ public:
     m_running = true;
     while(m_running) {
 
-      m_cube_angle += 2.0;
+      m_cube_angle += 5.0;
       m_model = translate(mat4(1.0), vec3(0.0, 0.0, 5.0)) * rotate(mat4(1.0), radians(m_cube_angle), vec3(0.0, 1.0, 0.0)) * rotate(mat4(1.0), radians(m_cube_angle), vec3(1.0, 0.0, 0.0));
       
       handleInput();
@@ -287,9 +287,12 @@ public:
   void draw() {
 
     clearBuffers();
-    for(int i = 0; i < m_sphere.size(); i ++) {
-      startDrawing(&m_sphere[i], ' ');
+    for(int i = 0;i < 12; i++) {
+      startDrawing(&m_cube[i], ' ');
     }
+    //    for(int i = 0; i < m_sphere.size(); i ++) {
+    //   startDrawing(&m_sphere[i], ' ');
+    // }
     
     for(int y = 0; y < m_terminal_height; ++y) {
       for(int x = 0; x < m_terminal_width; ++x) {
@@ -404,7 +407,7 @@ private:
     
   }
 
-  void initSphere(float step) {
+  void initSphere(float theta_step, float fi_step) {
     float fi = -radians(90.0f);
 
     auto getVector = [](float f, float t) {
@@ -416,28 +419,30 @@ private:
 	       return result;
 	     };
     
-    while(fi < radians(90.0)) {
+    while(fi <= radians(90.0)) {
 
-      for(float theta = 0.0f; theta <= radians(360.0f); theta += step) {
+      for(float theta = 0.0f; theta <= radians(360.0f); theta += theta_step) {
         Triangle triangle;
         triangle.vertices[0].position = getVector(fi, theta);
-        triangle.vertices[1].position = getVector(fi + step, theta);
-        triangle.vertices[2].position = getVector(fi + step, theta + step);
+        triangle.vertices[1].position = getVector(fi + fi_step, theta);
+        triangle.vertices[2].position = getVector(fi + fi_step, theta + theta_step);
 
-        float color = 0.1f + (fi + radians(90.0f)) / radians(180.0f) * 0.5;
-        float factor = 1.0 / radians(360.0f) * 0.4f;
+        float color = 0.5f + (fi + radians(90.0f)) / radians(180.0f) * 0.5;
         
-        triangle.vertices[0].color = vec3(color + factor * theta , color + factor * theta, color + factor * theta);
-        triangle.vertices[1].color = vec3(color + factor * theta, color + factor * theta, color + factor * theta);
-        triangle.vertices[2].color = vec3(color + factor * (theta + step), color + factor * (theta + step), color + factor * (theta + step));
+        triangle.vertices[0].color = vec3(color, color, color);
+        triangle.vertices[1].color = vec3(color, color, color);
+        triangle.vertices[2].color = vec3(color, color, color);
 
         m_sphere.push_back(triangle);
 
-        triangle.vertices[1].position = getVector(fi, theta + step);
+        triangle.vertices[0].position = getVector(fi + fi_step, theta + theta_step);
+        triangle.vertices[1].position = getVector(fi, theta + theta_step);
+        triangle.vertices[2].position = getVector(fi, theta);
+        
         m_sphere.push_back(triangle);
       }
       
-      fi += step;
+      fi += fi_step;
     }
     
   }
@@ -495,11 +500,11 @@ private:
     int minY = m_terminal_height, maxY = 0;
 
     for(int i = 0; i < 3; i++) {
-      minX = std::min<int>(minX, transformedVertices[i].position.x);
-      maxX = std::max<int>(maxX, transformedVertices[i].position.x);
+      minX = std::min<int>(minX, transformedVertices[i].position.x - 1.5);
+      maxX = std::max<int>(maxX, transformedVertices[i].position.x + 1.5);
 
-      minY = std::min<int>(minY, transformedVertices[i].position.y);
-      maxY = std::max<int>(maxY, transformedVertices[i].position.y);
+      minY = std::min<int>(minY, transformedVertices[i].position.y - 1.5);
+      maxY = std::max<int>(maxY, transformedVertices[i].position.y + 1.5);
     }
 
     minX = std::max(minX, 0); minY = std::max(minY, 0);
@@ -508,14 +513,26 @@ private:
     // Rasterization
     for(int x = minX; x < maxX; x++) {
       for(int y = minY; y < maxY; y++) {
+
+        real e1 = ((x + 0.5) - transformedVertices[0].position.x) * (transformedVertices[1].position.y - transformedVertices[0].position.y) - ((y + 0.5) - transformedVertices[0].position.y) * (transformedVertices[1].position.x - transformedVertices[0].position.x);
+
+        real e2 = ((x + 0.5) - transformedVertices[1].position.x) * (transformedVertices[2].position.y - transformedVertices[1].position.y) - ((y + 0.5) - transformedVertices[1].position.y) * (transformedVertices[2].position.x - transformedVertices[1].position.x);
+
+        real e3 = ((x + 0.5) - transformedVertices[2].position.x) * (transformedVertices[0].position.y - transformedVertices[2].position.y) - ((y + 0.5) - transformedVertices[2].position.y) * (transformedVertices[0].position.x - transformedVertices[2].position.x);
+
+        if(!(e1 < 0.0 && e2 < 0.0 && e3 < 0.0) && !(e1 > 0.0 && e2 > 0.0 && e3 > 0.0)) {
+          continue;
+        }
+        
+        
         Barycentric coordinate = convertToBarycentric(transformedVertices[0].position,
 			      transformedVertices[1].position,
 			      transformedVertices[2].position,
 			      vec3(x + 0.5, y + 0.5, 0));
 
-        if(coordinate.a <= -0.5 || coordinate.b <= -0.5 || (coordinate.a + coordinate.b) >= 1.5) {
-          continue;
-        }
+        // if(coordinate.a <= -0.5 || coordinate.b <= -0.5 || (coordinate.a + coordinate.b) >= 1.5) {
+        //   continue;
+        // }
 
         vec3 v0 = transformedVertices[1].position - transformedVertices[0].position;
         vec3 v1 = transformedVertices[2].position - transformedVertices[0].position;
